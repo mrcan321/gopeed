@@ -9,12 +9,10 @@ import 'package:share_handler/share_handler.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../api/model/create_task.dart';
-import '../../api/model/install_extension.dart';
 import '../../api/model/request.dart';
 import '../../core/entry/app_startup_options.dart';
 import '../../core/utils/content_uri_resolver.dart';
 import '../../core/window/app_window_launcher.dart';
-import '../../features/extensions/application/pending_extension_install.dart';
 import '../../features/tasks/application/pending_create_task.dart';
 import '../../util/util.dart';
 import '../router/app_router.dart';
@@ -106,15 +104,7 @@ class AppDeepLinkController extends AsyncNotifier<AppDeepLinkState> {
       return;
     }
 
-    if (route == '/extension') {
-      final params = uri.queryParameters['params'];
-      if (params?.isNotEmpty == true) {
-        ref.read(pendingExtensionInstallProvider.notifier).set(InstallExtension.fromJson(_decodeParams(params!)));
-      }
-      await _go('/extensions');
-      return;
-    }
-
+    // Extension installation from deep links is deliberately unsupported.
     await _go('/');
   }
 

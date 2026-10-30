@@ -68,14 +68,6 @@ func NewService(downloader *download.Downloader) (*Service, error) {
 		newRoute(http.MethodPost, "/api/v1/mirrors/{provider}/candidates", service.mirrorCandidates),
 		newRoute(http.MethodGet, "/api/v1/config", service.getConfig),
 		newRoute(http.MethodPut, "/api/v1/config", service.putConfig),
-		newRoute(http.MethodPost, "/api/v1/extensions", service.installExtension),
-		newRoute(http.MethodGet, "/api/v1/extensions", service.getExtensions),
-		newRoute(http.MethodGet, "/api/v1/extensions/{identity}", service.getExtension),
-		newRoute(http.MethodPut, "/api/v1/extensions/{identity}/settings", service.updateExtensionSettings),
-		newRoute(http.MethodPut, "/api/v1/extensions/{identity}/switch", service.switchExtension),
-		newRoute(http.MethodDelete, "/api/v1/extensions/{identity}", service.deleteExtension),
-		newRoute(http.MethodGet, "/api/v1/extensions/{identity}/update", service.updateCheckExtension),
-		newRoute(http.MethodPost, "/api/v1/extensions/{identity}/update", service.updateExtension),
 		newRoute(http.MethodPost, "/api/v1/webhook/test", service.testWebhook),
 	}
 	if err := validateRoutes(service.routes); err != nil {

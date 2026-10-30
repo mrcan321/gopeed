@@ -4,9 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/tasks/application/task_list_navigation.dart';
 
-import '../../features/extensions/presentation/pages/extensions_page.dart';
-import '../../features/extensions/presentation/pages/extension_details_page.dart';
-import '../../features/extensions/application/extensions_controller.dart';
 import '../../features/auth/application/web_auth_controller.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
@@ -34,21 +31,6 @@ class AppRouter {
     final isMobile =
         !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
     final sectionRoutes = [
-      GoRoute(
-        path: isMobile ? 'extensions' : '/extensions',
-        builder: _runtimePage((context, state) => const ExtensionsPage()),
-        routes: [
-          GoRoute(
-            path: ':id',
-            builder: _runtimePage(
-              (context, state) => ExtensionDetailsPage(
-                extensionId: state.pathParameters['id'] ?? '',
-                initialItem: state.extra is ExtensionListItem ? state.extra as ExtensionListItem : null,
-              ),
-            ),
-          ),
-        ],
-      ),
       GoRoute(
         path: isMobile ? 'settings' : '/settings',
         builder: _runtimePage((context, state) => const SettingsPage()),

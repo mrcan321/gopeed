@@ -1,4 +1,4 @@
-name: Android APK Build
+name: Private Android APK (No Extensions)
 
 on:
   push:
@@ -59,11 +59,11 @@ jobs:
 
       - name: Build universal release APK
         working-directory: ui/flutter
-        run: flutter build apk --release --dart-define=UPDATE_CHANNEL=androidApk
+        run: flutter build apk --release --dart-define=UPDATE_CHANNEL=androidApk --dart-define=GOPEED_NO_EXTENSIONS=true
 
       - name: Build split APKs by CPU architecture
         working-directory: ui/flutter
-        run: flutter build apk --release --split-per-abi --dart-define=UPDATE_CHANNEL=androidApk
+        run: flutter build apk --release --split-per-abi --dart-define=UPDATE_CHANNEL=androidApk --dart-define=GOPEED_NO_EXTENSIONS=true
 
       - name: Show generated APKs
         run: ls -lh ui/flutter/build/app/outputs/flutter-apk/*.apk
@@ -71,7 +71,7 @@ jobs:
       - name: Upload Android APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Gopeed-Android-APKs
+          name: Gopeed-Android-NoExtensions-APKs
           path: ui/flutter/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 30

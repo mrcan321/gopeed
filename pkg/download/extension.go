@@ -26,12 +26,16 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
+// The personal fork never permits third-party extensions to execute.
+const extensionsDisabled = true
+
 var (
 	gitSuffix = ".git"
 
 	extensionsDir       = "extensions"
 	extensionIgnoreDirs = []string{gitSuffix, "node_modules"}
 
+	ErrExtensionsDisabled = fmt.Errorf("extensions disabled in this personal build")
 	ErrExtensionNoManifest = fmt.Errorf("manifest.json not found")
 	ErrExtensionNotFound   = fmt.Errorf("extension not found")
 )
@@ -46,10 +50,12 @@ const (
 )
 
 func (d *Downloader) InstallExtensionByGit(url string) (*Extension, error) {
+	if extensionsDisabled { return nil, ErrExtensionsDisabled }
 	return d.fetchExtensionByGit(url, d.InstallExtensionByFolder)
 }
 
 func (d *Downloader) InstallExtensionByFolder(path string, devMode bool) (*Extension, error) {
+	if extensionsDisabled { return nil, ErrExtensionsDisabled }
 	ext, err := d.parseExtensionByPath(path)
 	if err != nil {
 		return nil, err
@@ -89,6 +95,7 @@ func (d *Downloader) InstallExtensionByFolder(path string, devMode bool) (*Exten
 
 // UpgradeCheckExtension Check if there is a new version for the extension.
 func (d *Downloader) UpgradeCheckExtension(identity string) (newVersion string, err error) {
+	if extensionsDisabled { return "", ErrExtensionsDisabled }
 	ext, err := d.GetExtension(identity)
 	if err != nil {
 		return
@@ -111,6 +118,7 @@ func (d *Downloader) UpgradeCheckExtension(identity string) (newVersion string, 
 }
 
 func (d *Downloader) UpgradeExtension(identity string) error {
+	if extensionsDisabled { return ErrExtensionsDisabled }
 	ext, err := d.GetExtension(identity)
 	if err != nil {
 		return err
@@ -126,6 +134,7 @@ func (d *Downloader) UpgradeExtension(identity string) error {
 }
 
 func (d *Downloader) UpdateExtensionSettings(identity string, settings map[string]any) error {
+	if extensionsDisabled { return ErrExtensionsDisabled }
 	ext, err := d.GetExtension(identity)
 	if err != nil {
 		return err
@@ -139,6 +148,7 @@ func (d *Downloader) UpdateExtensionSettings(identity string, settings map[strin
 }
 
 func (d *Downloader) SwitchExtension(identity string, status bool) error {
+	if extensionsDisabled { return ErrExtensionsDisabled }
 	ext, err := d.GetExtension(identity)
 	if err != nil {
 		return err
@@ -148,6 +158,7 @@ func (d *Downloader) SwitchExtension(identity string, status bool) error {
 }
 
 func (d *Downloader) DeleteExtension(identity string) error {
+	if extensionsDisabled { return ErrExtensionsDisabled }
 	ext, err := d.GetExtension(identity)
 	if err != nil {
 		return err
@@ -178,10 +189,12 @@ func (d *Downloader) DeleteExtension(identity string) error {
 }
 
 func (d *Downloader) GetExtensions() []*Extension {
+	if extensionsDisabled { return []*Extension{} }
 	return d.extensions
 }
 
 func (d *Downloader) GetExtension(identity string) (*Extension, error) {
+	if extensionsDisabled { return nil, ErrExtensionsDisabled }
 	extension := d.getExtension(identity)
 	if extension == nil {
 		return nil, ErrExtensionNotFound
@@ -370,6 +383,7 @@ func (d *Downloader) triggerOnDone(task *Task) {
 }
 
 func doTrigger[T any](d *Downloader, event ActivationEvent, req *base.Request, ctx T, handler func(ext *Extension, gopeed *Instance, ctx T)) error {
+	if extensionsDisabled { return nil }
 	// init extension global object
 	gopeed := &Instance{
 		Events: make(InstanceEvents),

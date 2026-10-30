@@ -48,6 +48,8 @@ android {
 
     buildTypes {
         release {
+            // Install side-by-side instead of replacing the official Gopeed app.
+            applicationIdSuffix = ".noextensions"
             signingConfig =
                 if (!apkKeyPassword.isNullOrEmpty() && !apkStorePassword.isNullOrEmpty()) {
                     signingConfigs.getByName("release")

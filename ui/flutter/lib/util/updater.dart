@@ -30,6 +30,7 @@ enum UpdateChannel {
 }
 
 const _channelEnv = String.fromEnvironment('UPDATE_CHANNEL');
+const _privateNoExtensions = bool.fromEnvironment('GOPEED_NO_EXTENSIONS', defaultValue: false);
 
 UpdateChannel? get updateChannel {
   for (final channel in UpdateChannel.values) {
@@ -58,7 +59,8 @@ Future<void> installUpdater() async {
   );
 }
 
-Future<VersionInfo?> checkUpdate() => AppUpdateClient().check(appVersion);
+Future<VersionInfo?> checkUpdate() =>
+    _privateNoExtensions ? Future<VersionInfo?>.value(null) : AppUpdateClient().check(appVersion);
 
 /// Package selection belongs to the client, including when the Downloader is remote.
 String appUpdateAssetName(String version, UpdateChannel? channel, String architecture) {
@@ -101,6 +103,7 @@ Future<void> updateApp(
   required GopeedService service,
   required UpdateProgressCallback onProgress,
 }) async {
+  if (_privateNoExtensions) throw StateError('Official updates disabled for personal no-extension builds');
   final channel = updateChannel;
   final assetName = appUpdateAssetName(versionInfo.version, channel, getArch().name);
   var assetPath = '';

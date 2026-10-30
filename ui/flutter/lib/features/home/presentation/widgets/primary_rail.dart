@@ -40,13 +40,6 @@ class PrimaryRail extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           _RailItem(
-            icon: Icons.extension_outlined,
-            label: context.l10n.extensions,
-            active: activeSection == RailSection.extensions,
-            onTap: () => context.go('/extensions'),
-          ),
-          const SizedBox(height: 28),
-          _RailItem(
             icon: Icons.settings_outlined,
             label: context.l10n.setting,
             active: activeSection == RailSection.settings,
@@ -86,14 +79,6 @@ class PrimaryBottomNavigation extends StatelessWidget {
                     label: context.l10n.task,
                     active: activeSection == RailSection.tasks,
                     onTap: () => context.go('/'),
-                  ),
-                ),
-                Expanded(
-                  child: _BottomNavItem(
-                    icon: Icons.extension_outlined,
-                    label: context.l10n.extensions,
-                    active: activeSection == RailSection.extensions,
-                    onTap: () => context.go('/extensions'),
                   ),
                 ),
                 Expanded(

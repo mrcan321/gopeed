@@ -19,7 +19,6 @@ import '../../util/log_util.dart';
 import '../../util/analytics.dart';
 import '../../util/package_info.dart';
 import '../../util/util.dart';
-import '../rpc/webview_rpc_service.dart';
 import 'android_foreground_service.dart';
 import 'location_keep_alive.dart';
 import 'continued_processing.dart';
@@ -56,7 +55,6 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
 
   @override
   Future<AppRuntimeState> build() async {
-    ref.onDispose(() => unawaited(WebViewRpcService.instance.stop()));
     return _init();
   }
 
@@ -116,11 +114,7 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
     initLogger();
 
     final startConfig = await _loadStartConfig();
-    try {
-      startConfig.webViewRpcConfig = await WebViewRpcService.instance.start();
-    } catch (error, stackTrace) {
-      logger.w('webview RPC initialization failed', error, stackTrace);
-    }
+    // No extension WebView RPC in this personal Android app.
     Object? startupError;
     var runningPort = 0;
     var apiServerState = const ApiServerState(
@@ -253,6 +247,7 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
   }
 
   Future<void> _initAnalytics(DownloaderConfig config) async {
+    if (const bool.fromEnvironment('GOPEED_NO_EXTENSIONS', defaultValue: false)) return;
     if (!AnalyticsConfig.isConfigured || !config.extra.analyticsEnabled) return;
     try {
       final generatedClientId = await Analytics.instance.init(fallbackClientId: config.extra.deviceId);
