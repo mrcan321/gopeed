@@ -131,6 +131,8 @@ public final class DownloadService extends Service {
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(30000);
             connection.setRequestProperty("Accept-Encoding", "identity");
+            // Avoid leaking the device model/Android version in the default user agent.
+            connection.setRequestProperty("User-Agent", "PrivateDownloader/1.0");
 
             int code = connection.getResponseCode();
             if (cancelled) throw new IOException("İptal edildi");
@@ -171,9 +173,9 @@ public final class DownloadService extends Service {
                     if (now - lastNotice > 800) {
                         int percent = size > 0 ? (int) Math.min(100L, received * 100L / size) : -1;
                         status = size > 0
-                            ? String.format(Locale.ROOT, "İndiriliyor: %%d%%%% (%%d / %%d MB)",
+                            ? String.format(Locale.ROOT, "İndiriliyor: %d%% (%d / %d MB)",
                                   percent, received / 1048576, size / 1048576)
-                            : String.format(Locale.ROOT, "İndiriliyor: %%d MB", received / 1048576);
+                            : String.format(Locale.ROOT, "İndiriliyor: %d MB", received / 1048576);
                         getSystemService(NotificationManager.class).notify(
                             NOTIFICATION_ID,
                             notification("Dosya indiriliyor", percent, 100, size <= 0));
