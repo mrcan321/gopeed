@@ -1,0 +1,48 @@
+name: Publish direct APK downloads
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-noextensions-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish verified No Extensions build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download APKs from successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 41083487014 --repo "$GITHUB_REPOSITORY" --name Gopeed-Android-NoExtensions-APKs --dir incoming
+          test -s incoming/app-arm64-v8a-release.apk
+          test -s incoming/app-release.apk
+          mkdir -p publish
+          cp incoming/app-arm64-v8a-release.apk publish/Gopeed-NoExtensions-arm64.apk
+          cp incoming/app-release.apk publish/Gopeed-NoExtensions-universal.apk
+          (cd publish && sha256sum Gopeed-NoExtensions-*.apk > SHA256SUMS.txt)
+
+      - name: Publish direct GitHub Release downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='noextensions-2026-10-30'
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" publish/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" publish/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "6d82dcc398a8d8b8da554b3be7f8bec558844eed" \
+              --title "Gopeed No Extensions - Android 2026-10-30" \
+              --notes "Custom Android Gopeed build with extension installation, extension execution, extension API routes, extension deep links, and WebView RPC disabled. Analytics and official app auto-updates disabled. Package: com.gopeed.gopeed.noextensions. APK release build is debug-signed; do not install as an update over the official app." \
+              --prerelease
+          fi

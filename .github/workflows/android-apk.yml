@@ -3,6 +3,8 @@ name: Private Android APK (No Extensions)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '.github/workflows/publish-noextensions-apk.yml'
   workflow_dispatch:
 
 permissions:
