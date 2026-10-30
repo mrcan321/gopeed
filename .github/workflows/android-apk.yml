@@ -1,0 +1,77 @@
+name: Android APK Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    name: Build Android APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.6'
+          channel: stable
+          cache: true
+
+      - name: Build native Go Android library
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go get golang.org/x/mobile/bind
+          gomobile init
+          mkdir -p ui/flutter/android/app/libs
+          gomobile bind \
+            -tags nosqlite \
+            -ldflags="-w -s -checklinkname=0 -X github.com/GopeedLab/gopeed/pkg/base.Version=2.0.0-beta.4" \
+            -o ui/flutter/android/app/libs/libgopeed.aar \
+            -target=android \
+            -androidapi 21 \
+            -javapkg=com.gopeed \
+            github.com/GopeedLab/gopeed/bind/mobile
+
+      - name: Fetch Flutter dependencies
+        working-directory: ui/flutter
+        run: flutter pub get
+
+      - name: Build universal release APK
+        working-directory: ui/flutter
+        run: flutter build apk --release --dart-define=UPDATE_CHANNEL=androidApk
+
+      - name: Build split APKs by CPU architecture
+        working-directory: ui/flutter
+        run: flutter build apk --release --split-per-abi --dart-define=UPDATE_CHANNEL=androidApk
+
+      - name: Show generated APKs
+        run: ls -lh ui/flutter/build/app/outputs/flutter-apk/*.apk
+
+      - name: Upload Android APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gopeed-Android-APKs
+          path: ui/flutter/build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
