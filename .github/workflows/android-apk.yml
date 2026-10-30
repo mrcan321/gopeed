@@ -1,18 +1,22 @@
-name: Private Android APK (No Extensions)
+name: Gopeed Android ARM64 Latest
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '.github/workflows/publish-noextensions-apk.yml'
   workflow_dispatch:
 
+# Exactly one Android build/publisher runs at a time.
+concurrency:
+  group: gopeed-noextensions-arm64-latest
+  cancel-in-progress: false
+
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 jobs:
   build-android:
-    name: Build Android APKs
+    name: Build and publish Galaxy A34 5G APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -38,7 +42,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Build native Go Android library
+      - name: Build Go native library (ARM64 only)
         shell: bash
         run: |
           set -euo pipefail
@@ -50,7 +54,7 @@ jobs:
             -tags nosqlite \
             -ldflags="-w -s -checklinkname=0 -X github.com/GopeedLab/gopeed/pkg/base.Version=2.0.0-beta.4" \
             -o ui/flutter/android/app/libs/libgopeed.aar \
-            -target=android \
+            -target=android/arm64 \
             -androidapi 21 \
             -javapkg=com.gopeed \
             github.com/GopeedLab/gopeed/bind/mobile
@@ -59,21 +63,85 @@ jobs:
         working-directory: ui/flutter
         run: flutter pub get
 
-      - name: Build universal release APK
+      - name: Build ARM64 release APK only
         working-directory: ui/flutter
-        run: flutter build apk --release --dart-define=UPDATE_CHANNEL=androidApk --dart-define=GOPEED_NO_EXTENSIONS=true
+        run: |
+          flutter build apk --release --split-per-abi --target-platform android-arm64 \
+            --dart-define=UPDATE_CHANNEL=androidApk \
+            --dart-define=GOPEED_NO_EXTENSIONS=true
 
-      - name: Build split APKs by CPU architecture
-        working-directory: ui/flutter
-        run: flutter build apk --release --split-per-abi --dart-define=UPDATE_CHANNEL=androidApk --dart-define=GOPEED_NO_EXTENSIONS=true
+      - name: Verify architecture and prepare latest APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='ui/flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'
+          test -s "$source"
+          unzip -Z1 "$source" | grep -qx 'lib/arm64-v8a/libgojni.so'
+          if unzip -Z1 "$source" | grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/'; then
+            echo 'Unexpected non-ARM64 libraries found!' >&2
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$source" dist/Gopeed-NoExtensions-arm64.apk
+          sha256sum dist/Gopeed-NoExtensions-arm64.apk
 
-      - name: Show generated APKs
-        run: ls -lh ui/flutter/build/app/outputs/flutter-apk/*.apk
-
-      - name: Upload Android APKs
+      - name: Upload one latest GitHub Actions artifact
+        id: apk_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gopeed-Android-NoExtensions-APKs
-          path: ui/flutter/build/app/outputs/flutter-apk/*.apk
+          name: Gopeed-NoExtensions-ARM64-latest
+          path: dist/Gopeed-NoExtensions-arm64.apk
           if-no-files-found: error
           retention-days: 30
+          overwrite: true
+
+      - name: Publish APK as one stable GitHub Latest Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='noextensions-latest'
+          apk='dist/Gopeed-NoExtensions-arm64.apk'
+          title='Gopeed No Extensions - Galaxy A34 5G - Latest'
+          notes='Single ARM64 APK for Galaxy A34 5G. All extensions are disabled, including install, runtime, API and deep-link triggers. Analytics and official update checks are disabled. Android package: com.gopeed.gopeed.noextensions. Release-mode APK is debug-signed; preserve the signing key for future updates.'
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes" --latest
+          else
+            gh release create "$tag" "$apk" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes "$notes" \
+              --latest
+          fi
+          # Update the stable release tag to the source commit of this build.
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -f "$tag" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$tag"
+
+      - name: Delete all previous Gopeed APK artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST_ARTIFACT_ID: ${{ steps.apk_artifact.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Preserve artifacts from unrelated test/release workflows.
+          # Remove all older APK artifacts from earlier build/publish workflows.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | [.id, .name] | @tsv' |
+          while IFS=$'\t' read -r artifact_id artifact_name; do
+            case "$artifact_name" in
+              Gopeed-Android-APKs|Gopeed-Android-NoExtensions-APKs|Gopeed-NoExtensions-ARM64-APK|Gopeed-NoExtensions-ARM64-latest)
+                if [ "$artifact_id" != "$LATEST_ARTIFACT_ID" ]; then
+                  echo "Deleting obsolete APK artifact $artifact_id ($artifact_name)"
+                  gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
+                fi
+                ;;
+            esac
+          done
+          echo "Latest APK artifact: ${LATEST_ARTIFACT_ID}"
+          echo "Permanent download: https://github.com/$GITHUB_REPOSITORY/releases/download/noextensions-latest/Gopeed-NoExtensions-arm64.apk"
