@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -tags nosqlite,privacyandroid -timeout 10m -count=1 -v -run '^(TestPrivacyURLMatrixLocalTLS|TestPrivacyRejectsUnrequestedURLs)$' ./pkg/download 2>&1 | tee /tmp/privacy-local.txt
+          go test -tags nosqlite,privacyandroid -timeout 10m -count=1 -v -run '^(TestPrivacyURLMatrixLocalTLS|TestPrivacyRejectsUnrequestedURLs|TestPrivacyTLSRejectsSelfSignedCertificate|TestPrivacyPauseResumeHTTPS)$' ./pkg/download 2>&1 | tee /tmp/privacy-local.txt
       - name: Real Internet HTTPS URLs downloaded by Gopeed (not curl)
         shell: bash
         env:
