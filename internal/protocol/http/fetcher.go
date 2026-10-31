@@ -560,7 +560,7 @@ func (f *Fetcher) Resolve(req *base.Request) error {
 
 	// Start async prefetch in background (only for range-supported resources)
 	// For non-range resources, the response will be used directly in Start
-	if res.Range && reuseResolveBody {
+	if !base.PrivateAndroid && res.Range && reuseResolveBody {
 		f.prefetchStopCh = make(chan struct{})
 		f.resolveFallback.Store(true)
 		go f.asyncPrefetch()
