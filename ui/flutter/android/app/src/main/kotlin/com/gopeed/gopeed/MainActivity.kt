@@ -12,6 +12,10 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Install the MediaStore writer before the Go backend starts.
+        // Original Flutter interface and Go multi-range engine are untouched.
+        Libgopeed.setDownloadFileProvider(PrivateDownloads(applicationContext))
+
         val taskQueue =
             flutterEngine.dartExecutor.binaryMessenger.makeBackgroundTaskQueue()
         val libgopeedChannel = MethodChannel(
