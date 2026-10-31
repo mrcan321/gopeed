@@ -126,6 +126,13 @@ func Start(startCfg *model.StartConfig) (port int, err error) {
 		startCfg.Address = apiConfig.Address
 		startCfg.ApiToken = apiConfig.Token
 	}
+	if base.PrivateAndroid {
+        // Never start a remotely accessible REST/MCP listener, even when an
+        // old stored config or a call from the UI attempts to enable it.
+        disabled := false
+        startCfg.ApiEnable = &disabled
+        startCfg.MCPEnable = false
+    }
 	if err := Downloader.ContinueOnStartup(); err != nil {
 		Downloader.Logger.Warn().Err(err).Msg("auto-start tasks failed")
 	}
