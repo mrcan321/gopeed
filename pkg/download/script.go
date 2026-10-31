@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
+
+ "github.com/GopeedLab/gopeed/pkg/base"
 )
 
 // ScriptEvent represents the type of script event
@@ -31,6 +33,7 @@ type ScriptPayload struct {
 
 // getScriptPaths extracts script paths from config
 func (d *Downloader) getScriptPaths() []string {
+	if base.PrivateAndroid { return nil }
 	cfg := d.cfg.DownloaderStoreConfig
 	if cfg == nil {
 		return nil
