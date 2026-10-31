@@ -63,7 +63,8 @@ Future<bool> initDownloaderConfig(
       changed = true;
     }
   }
-  if (config.categories.isEmpty && config.downloadDir.isNotEmpty) {
+  if (!const bool.fromEnvironment('GOPEED_PRIVACY_MODE', defaultValue: false) &&
+      config.categories.isEmpty && config.downloadDir.isNotEmpty) {
     config.categories = [
       _builtinCategory('categoryMusic', path.join(config.downloadDir, 'Music')),
       _builtinCategory('categoryVideo', path.join(config.downloadDir, 'Video')),
