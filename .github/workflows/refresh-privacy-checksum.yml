@@ -1,0 +1,25 @@
+name: Refresh released Android APK checksum
+on:
+  push:
+    branches: [privacy-url-matrix-tests-20261031]
+    paths:
+      - '.github/workflows/refresh-privacy-checksum.yml'
+permissions:
+  contents: write
+jobs:
+  checksum:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download published APK and refresh SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download privacy-original-latest -R "$GITHUB_REPOSITORY" --pattern 'Gopeed-Privacy-Original-ARM64.apk'
+          sha256sum Gopeed-Privacy-Original-ARM64.apk > SHA256SUMS.txt
+          gh release upload privacy-original-latest SHA256SUMS.txt -R "$GITHUB_REPOSITORY" --clobber
+          cat SHA256SUMS.txt
+          release_asset_sha="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/privacy-original-latest" --jq '.assets[] | select(.name=="Gopeed-Privacy-Original-ARM64.apk") | .digest')"
+          computed_sha="sha256:$(cut -d ' ' -f 1 SHA256SUMS.txt)"
+          test "$computed_sha" = "$release_asset_sha"
