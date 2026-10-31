@@ -5,10 +5,17 @@ package download
 import (
     "bytes"
     "crypto/sha256"
+    "crypto/ecdsa"
+    "crypto/elliptic"
+    "crypto/rand"
+    "crypto/tls"
+    "crypto/x509"
     "encoding/pem"
     "fmt"
     "io"
     "net/http"
+    "net"
+    "math/big"
     "net/http/httptest"
     "os"
     "path/filepath"
@@ -290,12 +297,29 @@ func TestPrivacyLiveURLMatrix(t *testing.T) {
 
 func TestPrivacyTLSRejectsSelfSignedCertificate(t *testing.T) {
     var served atomic.Int32
-    untrusted:=httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+    // httptest.NewTLSServer uses the SAME built-in certificate in every test.
+    // Earlier URL cases added that certificate to SSL_CERT_FILE; Go caches the
+    // root pool. Generate a unique, independently self-signed certificate to
+    // prove the downloader rejects unknown trust anchors.
+    key,err:=ecdsa.GenerateKey(elliptic.P256(),rand.Reader)
+    if err!=nil{t.Fatal(err)}
+    template:=&x509.Certificate{
+        SerialNumber:big.NewInt(time.Now().UnixNano()),
+        NotBefore:time.Now().Add(-time.Hour),
+        NotAfter:time.Now().Add(time.Hour),
+        IPAddresses:[]net.IP{net.ParseIP("127.0.0.1")},
+        KeyUsage:x509.KeyUsageDigitalSignature,
+        ExtKeyUsage:[]x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+    }
+    der,err:=x509.CreateCertificate(rand.Reader,template,template,&key.PublicKey,key)
+    if err!=nil{t.Fatal(err)}
+    untrusted:=httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
         served.Add(1)
         _,_=w.Write([]byte("should never arrive"))
     }))
+    untrusted.TLS=&tls.Config{Certificates:[]tls.Certificate{{Certificate:[][]byte{der},PrivateKey:key}}}
+    untrusted.StartTLS()
     defer untrusted.Close()
-    // No SSL_CERT_FILE override; the test TLS certificate is not trusted.
     d,p:=privacySetup(t)
     id,err:=d.CreateDirect(&base.Request{URL:untrusted.URL+"/private"},&base.Options{})
     if err==nil{
