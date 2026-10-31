@@ -247,7 +247,8 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
   }
 
   Future<void> _initAnalytics(DownloaderConfig config) async {
-    if (const bool.fromEnvironment('GOPEED_NO_EXTENSIONS', defaultValue: false)) return;
+    if (const bool.fromEnvironment('GOPEED_NO_EXTENSIONS', defaultValue: false) ||
+        const bool.fromEnvironment('GOPEED_PRIVACY_MODE', defaultValue: false)) return;
     if (!AnalyticsConfig.isConfigured || !config.extra.analyticsEnabled) return;
     try {
       final generatedClientId = await Analytics.instance.init(fallbackClientId: config.extra.deviceId);
