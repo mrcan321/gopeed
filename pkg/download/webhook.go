@@ -39,6 +39,7 @@ type WebhookPayload struct {
 // getWebhookUrls extracts webhook URLs from config
 // Supports both new webhook config format and legacy extra field for backward compatibility
 func (d *Downloader) getWebhookUrls() []string {
+	if base.PrivateAndroid { return nil }
 	cfg := d.cfg.DownloaderStoreConfig
 	if cfg == nil {
 		return nil
@@ -188,6 +189,7 @@ func (d *Downloader) SendTestWebhook() error {
 // TestWebhookUrl tests a single webhook URL with a simulated payload
 // Returns error if the URL does not respond with HTTP 200
 func (d *Downloader) TestWebhookUrl(url string) error {
+	if base.PrivateAndroid { return fmt.Errorf("privacy Android: webhook network calls forbidden") }
 	// Create a simulated test task with minimal required fields
 	testTask := NewTask()
 	testTask.Protocol = "http"
