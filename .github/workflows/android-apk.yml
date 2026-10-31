@@ -7,8 +7,8 @@ on:
 
 # Exactly one Android build/publisher runs at a time.
 concurrency:
-  group: gopeed-privacy-original-arm64-latest
-  cancel-in-progress: false
+  group: gopeed-privacy-original-arm64-final-20261031
+  cancel-in-progress: true
 
 permissions:
   contents: write
