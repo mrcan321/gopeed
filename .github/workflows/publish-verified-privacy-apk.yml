@@ -1,0 +1,68 @@
+name: Publish verified Gopeed Privacy APK immediately
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-verified-privacy-apk.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the APK source commit is unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "832c76902ef3d73768943efeb1a322e920ec51c7"
+          test -f pkg/download/android_storage.go
+          test -f ui/flutter/android/app/src/main/kotlin/com/gopeed/gopeed/PrivateDownloads.kt
+      - name: Download successfully built and checked ARM64 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/$GITHUB_REPOSITORY/actions/runs/41198051568 --jq .conclusion)" = success
+          test "$(gh api repos/$GITHUB_REPOSITORY/actions/runs/41198051568 --jq .head_sha)" = "832c76902ef3d73768943efeb1a322e920ec51c7"
+          mkdir -p dist
+          gh run download 41198051568 -R "$GITHUB_REPOSITORY" \
+            -n Gopeed-Privacy-Original-ARM64-build -D dist
+          echo '858e85cf9d14facabaede1c7d6399ede61ddb56ece22da5251cdc4e1ca926050  dist/Gopeed-Privacy-Original-ARM64.apk' | sha256sum -c -
+          sha256sum dist/Gopeed-Privacy-Original-ARM64.apk > dist/SHA256SUMS.txt
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="privacy-original-latest"
+          title="Gopeed Privacy - Orijinal arayuz ve 16 baglantili indirme"
+          cat > /tmp/notes.md <<'NOTES'
+          Orijinal Gopeed Flutter arayüzü, ayarlar ve çok bağlantılı Go indirme motoru.
+
+          - Yalnızca kullanıcının başlattığı HTTPS GET indirmeleri. Başka hosta yönlendirme reddedilir.
+          - Android 11+ için MediaStore ile doğrudan public Download klasörüne yazma; fotoğraf ve geniş depolama izni olmadan.
+          - Telemetri, analitik, güncelleme kontrolü, API/MCP sunucusu, eklenti, webhook, script, torrent/FTP/HLS/ED2K ve otomatik açılan ağ işlemleri kapalı.
+          - Arka planda indirme korunur, telefon açılışında otomatik başlatma kapalı.
+          - Galaxy A34 5G için ARM64 APK.
+          - Kaynak kod statik gizlilik denetimi ve GitHub CI ARM64 derlemesi geçti. Gerçek Samsung cihazında MediaStore dosya erişimi ve ağ paketi izleme testi henüz yapılmadı; çalışırlık ve yüzde yüz ağ gizliliği doğrulanmış sayılmamalı.
+          - APK CI tarafından debug key ile imzalanmıştır; eski farklı imzalı sürümü kaldırmanız gerekebilir.
+
+          APK source: 832c76902ef3d73768943efeb1a322e920ec51c7
+          NOTES
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/Gopeed-Privacy-Original-ARM64.apk dist/SHA256SUMS.txt -R "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" -R "$GITHUB_REPOSITORY" --title "$title" --notes-file /tmp/notes.md --latest
+          else
+            gh release create "$tag" dist/Gopeed-Privacy-Original-ARM64.apk dist/SHA256SUMS.txt \
+              -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "$title" --notes-file /tmp/notes.md --latest
+          fi
+          echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
