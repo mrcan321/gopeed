@@ -8,6 +8,7 @@ import (
 	nativebridge "github.com/GopeedLab/gopeed/bind/native"
 	"github.com/GopeedLab/gopeed/internal/webview/rpcprovider"
 	goapi "github.com/GopeedLab/gopeed/pkg/api"
+    "github.com/GopeedLab/gopeed/pkg/base"
     "github.com/GopeedLab/gopeed/pkg/download"
 	"github.com/GopeedLab/gopeed/pkg/rest"
 	"github.com/GopeedLab/gopeed/pkg/rest/model"
@@ -100,6 +101,7 @@ func SubscribeTaskEvents(mask int64, listener TaskEventListener) {
 }
 
 func applyWebViewProvider(config *model.StartConfig) {
+    if base.PrivateAndroid { return }
 	if config == nil || config.WebViewRPCConfig == nil || !config.WebViewRPCConfig.Enabled() {
 		return
 	}
