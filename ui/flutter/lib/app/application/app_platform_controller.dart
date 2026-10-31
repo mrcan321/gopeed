@@ -288,12 +288,14 @@ class AppPlatformController extends AsyncNotifier<AppPlatformState> with WindowL
   }
 
   Future<void> _initCheckUpdate() async {
+    if (const bool.fromEnvironment('GOPEED_PRIVACY_MODE', defaultValue: false)) return;
     final runtime = ref.read(appRuntimeControllerProvider).value;
     if (runtime?.downloaderConfig.extra.notifyWhenNewVersion == false) return;
     await checkForUpdate();
   }
 
   Future<VersionInfo?> checkForUpdate() {
+    if (const bool.fromEnvironment('GOPEED_PRIVACY_MODE', defaultValue: false)) return Future.value(null);
     return _checkUpdateFuture ??= _performUpdateCheck().whenComplete(() => _checkUpdateFuture = null);
   }
 
