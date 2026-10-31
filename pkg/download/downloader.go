@@ -1640,7 +1640,7 @@ func (d *Downloader) watch(task *Task) {
 		d.triggerWebhooks(WebhookEventDownloadDone, task, nil)
 		d.triggerScripts(ScriptEventDownloadDone, task, nil)
 
-		if e := postDownloadExtra(task.Meta); e != nil {
+		if e := postDownloadExtra(task.Meta); e != nil && !base.PrivateAndroid {
 			downloadFilePath := task.Meta.SingleFilepath()
 
 			cfg, _ := d.GetConfig()
