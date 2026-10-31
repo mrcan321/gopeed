@@ -32,6 +32,11 @@ func categoryForResource(cfg *base.DownloaderStoreConfig, res *base.Resource) *b
 // runs on the result, so a category directory the white list rejects falls
 // back to the base directory of this task instead of failing it.
 func (d *Downloader) decideDownloadDir(opts *base.Options, res *base.Resource) (string, error) {
+    if base.PrivateAndroid {
+        dir := privateAndroidDirectory()
+        if dir == "" { return "", errors.New("MediaStore Download directory unavailable") }
+        return dir, nil
+    }
 	if opts == nil {
 		opts = &base.Options{}
 	}
