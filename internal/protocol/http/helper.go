@@ -305,7 +305,7 @@ func (f *Fetcher) buildClientWithTimeout(timeout time.Duration) *http.Client {
 			TLSHandshakeTimeout: timeout,
 		},
 		Impersonation: httpclient.ImpersonationOptions{
-			Mode:    httpclient.ImpersonationAuto,
+			Mode:    func() httpclient.ImpersonationMode { if base.PrivateAndroid { return httpclient.ImpersonationNative }; return httpclient.ImpersonationAuto }(),
 			Session: f.impersonationSession,
 		},
 	})
