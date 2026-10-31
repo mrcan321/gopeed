@@ -8,9 +8,15 @@ import (
 	nativebridge "github.com/GopeedLab/gopeed/bind/native"
 	"github.com/GopeedLab/gopeed/internal/webview/rpcprovider"
 	goapi "github.com/GopeedLab/gopeed/pkg/api"
+    "github.com/GopeedLab/gopeed/pkg/download"
 	"github.com/GopeedLab/gopeed/pkg/rest"
 	"github.com/GopeedLab/gopeed/pkg/rest/model"
 )
+
+// SetDownloadFileProvider connects MediaStore to the original Gopeed file writer.
+func SetDownloadFileProvider(provider download.DownloadFileProvider) {
+    download.RegisterPrivateAndroidStorage(provider)
+}
 
 func Start(cfg string) (int, error) {
 	var config model.StartConfig
