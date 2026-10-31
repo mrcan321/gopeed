@@ -1,25 +1,33 @@
-name: Private Android Downloader (HTTPS to Downloads only)
+name: Gopeed Original UI Privacy ARM64
 
 on:
   push:
-    branches: [main]
+    branches: [main, restore-gopeed-ui-privacy-20261031]
   workflow_dispatch:
+
+# Exactly one Android build/publisher runs at a time.
+concurrency:
+  group: gopeed-privacy-original-arm64-latest
+  cancel-in-progress: false
 
 permissions:
   contents: write
-
-concurrency:
-  group: gopeed-private-android-latest
-  cancel-in-progress: false
+  actions: write
 
 jobs:
-  build:
-    name: Build, audit and publish private Android APK
+  build-android:
+    name: Build original Gopeed multi-connection privacy APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -27,98 +35,130 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK 36
-        shell: bash
-        run: |
-          set -euo pipefail
-          # GitHub ubuntu-latest includes Android command-line tools. Avoid
-          # setup-android v3, which requests the retired SDK package "tools".
-          : "${ANDROID_HOME:=/usr/local/lib/android/sdk}"
-          sdkmanager_bin="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-          test -n "$sdkmanager_bin" && test -x "$sdkmanager_bin"
-          yes | "$sdkmanager_bin" --licenses >/dev/null || true
-          "$sdkmanager_bin" --install "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          gradle-version: '8.14'
+          flutter-version: '3.41.6'
+          channel: stable
+          cache: true
 
-      - name: Build standalone Java-only Android application
-        run: gradle -p private-android --no-daemon --stacktrace assembleRelease
-
-      - name: Enforce Android APK privacy invariants
+      - name: Build Go native library (ARM64 only)
         shell: bash
         run: |
           set -euo pipefail
-          apk='private-android/app/build/outputs/apk/release/app-release.apk'
-          test -s "$apk"
-          aapt="$ANDROID_HOME/build-tools/36.0.0/aapt"
-          "$aapt" dump badging "$apk" | head -n 25
-          "$aapt" dump permissions "$apk" > /tmp/permissions.txt
-          cat /tmp/permissions.txt
-          grep -q 'android.permission.INTERNET' /tmp/permissions.txt
-          grep -q 'android.permission.FOREGROUND_SERVICE_DATA_SYNC' /tmp/permissions.txt
-          if grep -Eq 'READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_|MANAGE_EXTERNAL_STORAGE|READ_CONTACTS|READ_SMS|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|RECORD_AUDIO|CAMERA|REQUEST_INSTALL_PACKAGES|QUERY_ALL_PACKAGES' /tmp/permissions.txt; then
-            echo 'Forbidden permission detected' >&2
-            exit 1
-          fi
-          if unzip -Z1 "$apk" | grep -E '^lib/|flutter_assets|libgojni|libapp[.]so'; then
-            echo 'Unexpected native engine or Flutter bundle' >&2
-            exit 1
-          fi
-          unzip -Z1 "$apk" | grep -q '^classes.dex$'
-          # Fail if the Java app grows any second network connection entrypoint.
-          test "$(grep -REl '\.openConnection\(' private-android/app/src/main/java | wc -l)" -eq 1
-          mkdir -p dist
-          cp "$apk" dist/Gopeed-Gizli-Indirici.apk
-          sha256sum dist/Gopeed-Gizli-Indirici.apk | tee dist/SHA256SUMS.txt
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go get golang.org/x/mobile/bind
+          gomobile init
+          mkdir -p ui/flutter/android/app/libs
+          gomobile bind \
+            -tags nosqlite,privacyandroid \
+            -ldflags="-w -s -checklinkname=0 -X github.com/GopeedLab/gopeed/pkg/base.Version=2.0.0-beta.4" \
+            -o ui/flutter/android/app/libs/libgopeed.aar \
+            -target=android/arm64 \
+            -androidapi 21 \
+            -javapkg=com.gopeed \
+            github.com/GopeedLab/gopeed/bind/mobile
 
-      - name: Upload APK as GitHub Actions artifact
+      - name: Fetch Flutter dependencies
+        working-directory: ui/flutter
+        run: flutter pub get
+
+      - name: Build ARM64 release APK only
+        working-directory: ui/flutter
+        run: |
+          flutter build apk --release --split-per-abi --target-platform android-arm64 \
+            --dart-define=UPDATE_CHANNEL=androidApk \
+            --dart-define=GOPEED_NO_EXTENSIONS=true \
+            --dart-define=GOPEED_PRIVACY_MODE=true
+
+      - name: Verify architecture and prepare latest APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          source='ui/flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'
+          test -s "$source"
+          unzip -Z1 "$source" | grep -qx 'lib/arm64-v8a/libgojni.so'
+          if unzip -Z1 "$source" | grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/'; then
+            echo 'Unexpected non-ARM64 libraries found!' >&2
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$source" dist/Gopeed-Privacy-Original-ARM64.apk
+          sha256sum dist/Gopeed-Privacy-Original-ARM64.apk
+
+      - name: Inspect Android manifest permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='dist/Gopeed-Privacy-Original-ARM64.apk'
+          aapt="$(find "$ANDROID_HOME/build-tools" -type f -name aapt -executable | sort -V | tail -n 1)"
+          test -x "$aapt"
+          "$aapt" dump permissions "$apk" | tee /tmp/gopeed-privacy-permissions.txt
+          grep -q 'android.permission.INTERNET' /tmp/gopeed-privacy-permissions.txt
+          if grep -Eq 'REQUEST_INSTALL_PACKAGES|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_|MANAGE_EXTERNAL_STORAGE|READ_CONTACTS|READ_SMS|RECORD_AUDIO|CAMERA|ACCESS_FINE_LOCATION' /tmp/gopeed-privacy-permissions.txt; then
+            echo 'Privacy build contains a forbidden Android permission' >&2
+            exit 1
+          fi
+
+      - name: Upload one latest GitHub Actions artifact
+        id: apk_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gopeed-Gizli-Indirici
-          path: |
-            dist/Gopeed-Gizli-Indirici.apk
-            dist/SHA256SUMS.txt
+          name: Gopeed-Privacy-Original-ARM64-build
+          path: dist/Gopeed-Privacy-Original-ARM64.apk
           if-no-files-found: error
           retention-days: 30
+          overwrite: true
 
-      - name: Publish private downloader as Latest GitHub Release
+      - name: Publish APK as one stable GitHub Latest Release asset
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag='privacy-only-latest'
-          apk='dist/Gopeed-Gizli-Indirici.apk'
-          title='Gopeed Gizli İndirici - Yalnızca HTTPS ve Download'
-          cat > /tmp/release-notes.md <<'NOTES'
-          PRIVACY-RESTRICTED ANDROID APK (Java-only, no Flutter/Go engine)
-
-          - Only starts an HTTPS GET when the user taps Download.
-          - Never follows redirects and never contacts an unrelated hostname.
-          - Saves only to Android's public Download directory using MediaStore.
-          - Does not request photos, general storage, contact, SMS, GPS or microphone access.
-          - No analytics, updater, extension, script, API server, tracker, BitTorrent, telemetry, wake-on-boot or proxy.
-          - Foreground data-sync service continues a user-initiated download in the background.
-          - No source file reading. Incomplete downloads are deleted.
-          - The Android OS and chosen download host necessarily see normal DNS/TLS/HTTPS network information while downloading. Device-wide system traffic is outside this app's control.
-          - Only HTTPS direct-file URLs work; redirecting sites, magnet links and torrent links are intentionally unsupported.
-          - The APK is release-mode but CI debug-signed with a temporary key; uninstall older builds if Android reports incompatible signatures.
-
-          Source: private-android/
-          NOTES
+          tag='privacy-original-latest'
+          apk='dist/Gopeed-Privacy-Original-ARM64.apk'
+          title='Gopeed Original UI - Privacy Restricted Android ARM64'
+          notes='Original Gopeed Flutter appearance, Settings and HTTP multi-connection downloader retained. Android-only privacy guards are compiled into the Go backend. No analytics, API server, updater, script, webhook, extensions, trackers, torrent or general storage/photo permissions. IMPORTANT: public Download MediaStore integration still requires verification before release.'
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" "$apk" dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes-file /tmp/release-notes.md --latest
+            gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes" --latest
           else
-            gh release create "$tag" "$apk" dist/SHA256SUMS.txt \
+            gh release create "$tag" "$apk" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "$title" \
-              --notes-file /tmp/release-notes.md \
+              --notes "$notes" \
               --latest
           fi
-          echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
-          echo "APK: https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/Gopeed-Gizli-Indirici.apk"
+          # Update the stable release tag to the source commit of this build.
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -f "$tag" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$tag"
+
+      - name: Delete all previous Gopeed APK artifacts
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST_ARTIFACT_ID: ${{ steps.apk_artifact.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Preserve artifacts from unrelated test/release workflows.
+          # Remove all older APK artifacts from earlier build/publish workflows.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | [.id, .name] | @tsv' |
+          while IFS=$'\t' read -r artifact_id artifact_name; do
+            case "$artifact_name" in
+              Gopeed-Android-APKs|Gopeed-Android-NoExtensions-APKs|Gopeed-NoExtensions-ARM64-APK|Gopeed-Privacy-Original-ARM64-build)
+                if [ "$artifact_id" != "$LATEST_ARTIFACT_ID" ]; then
+                  echo "Deleting obsolete APK artifact $artifact_id ($artifact_name)"
+                  gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
+                fi
+                ;;
+            esac
+          done
+          echo "Latest APK artifact: ${LATEST_ARTIFACT_ID}"
+          echo "Permanent download: https://github.com/$GITHUB_REPOSITORY/releases/download/privacy-original-latest/Gopeed-Privacy-Original-ARM64.apk"
