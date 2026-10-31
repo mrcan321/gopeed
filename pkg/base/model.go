@@ -28,10 +28,17 @@ type Request struct {
 }
 
 func (r *Request) Validate() error {
-	if r.URL == "" {
-		return fmt.Errorf("invalid request url")
-	}
-	return nil
+	if r.URL == "" { return fmt.Errorf("invalid request url") }
+    if PrivateAndroid {
+        parsed, err := url.ParseRequestURI(r.URL)
+        if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+            return fmt.Errorf("privacy Android permits only explicit HTTPS download URLs")
+        }
+        if r.SkipVerifyCert || (r.Proxy != nil && r.Proxy.Mode == RequestProxyModeCustom) {
+            return fmt.Errorf("privacy Android rejects insecure TLS and custom proxies")
+        }
+    }
+    return nil
 }
 
 type RequestProxyMode string
