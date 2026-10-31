@@ -286,3 +286,72 @@ func TestPrivacyLiveURLMatrix(t *testing.T) {
         })
     }
 }
+
+
+func TestPrivacyTLSRejectsSelfSignedCertificate(t *testing.T) {
+    var served atomic.Int32
+    untrusted:=httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+        served.Add(1)
+        _,_=w.Write([]byte("should never arrive"))
+    }))
+    defer untrusted.Close()
+    // No SSL_CERT_FILE override; the test TLS certificate is not trusted.
+    d,p:=privacySetup(t)
+    id,err:=d.CreateDirect(&base.Request{URL:untrusted.URL+"/private"},&base.Options{})
+    if err==nil{
+        task,waitErr:=privacyWaitTask(t,d,id,5*time.Second)
+        if waitErr==nil{t.Error("untrusted certificate download unexpectedly succeeded")}
+        if task!=nil && task.Meta!=nil && task.Meta.Res!=nil {
+            name:=task.Meta.SingleFilepath()
+            p.mu.Lock();published:=p.published[name];p.mu.Unlock()
+            if published {t.Error("untrusted response marked as downloaded")}
+        }
+    }
+    if served.Load()!=0 {t.Error("untrusted HTTPS server received request body")}
+}
+
+func TestPrivacyPauseResumeHTTPS(t *testing.T) {
+    payload:=make([]byte,12*1024*1024+3)
+    for i:=range payload {payload[i]=byte(i%239)}
+    server:=httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+        w.Header().Set("Accept-Ranges","bytes")
+        rangeText:=r.Header.Get("Range")
+        start,end:=0,len(payload)-1
+        if rangeText!="" {
+            n,_:=fmt.Sscanf(rangeText,"bytes=%d-%d",&start,&end)
+            if n==1 {end=len(payload)-1}
+            if start>=len(payload){w.WriteHeader(416);return}
+            if end>=len(payload){end=len(payload)-1}
+            w.Header().Set("Content-Range",fmt.Sprintf("bytes %d-%d/%d",start,end,len(payload)))
+            w.Header().Set("Content-Length",strconv.Itoa(end-start+1))
+            w.WriteHeader(206)
+        }else{
+            w.Header().Set("Content-Length",strconv.Itoa(len(payload)))
+            w.WriteHeader(200)
+        }
+        for i:=start;i<=end;i+=8192{
+            limit:=i+8192;if limit>end+1{limit=end+1}
+            if _,err:=w.Write(payload[i:limit]);err!=nil{return}
+            if fl,ok:=w.(http.Flusher);ok {fl.Flush()}
+            time.Sleep(3*time.Millisecond)
+        }
+    }))
+    defer server.Close()
+    privacyInstallTrust(t,server)
+    d,p:=privacySetup(t)
+    id,err:=d.CreateDirect(&base.Request{URL:server.URL+"/slow-file.bin"},&base.Options{
+        Extra:&protocolhttp.OptsExtra{Connections:8},
+    })
+    if err!=nil {t.Fatal(err)}
+    time.Sleep(120*time.Millisecond)
+    if err:=d.Pause(&TaskFilter{IDs:[]string{id}});err!=nil{t.Fatalf("pause: %v",err)}
+    if err:=d.Continue(&TaskFilter{IDs:[]string{id}});err!=nil{t.Fatalf("resume: %v",err)}
+    task,err:=privacyWaitTask(t,d,id,35*time.Second)
+    if err!=nil{t.Fatalf("pause/resume completion: %v",err)}
+    got,err:=os.ReadFile(task.Meta.SingleFilepath())
+    if err!=nil{t.Fatal(err)}
+    if !bytes.Equal(got,payload){t.Fatalf("resume corrupt: got sha256=%x expected=%x",sha256.Sum256(got),sha256.Sum256(payload))}
+    p.mu.Lock();published:=p.published[task.Meta.SingleFilepath()];p.mu.Unlock()
+    if !published{t.Fatal("resumed download was not published")}
+    t.Logf("PAUSE RESUME PASS bytes=%d sha256=%x",len(got),sha256.Sum256(got))
+}
