@@ -29,6 +29,7 @@ func GetAPIServerState() (*model.APIServerState, error) {
 }
 
 func StartAPIServer() (*model.APIServerState, error) {
+	if base.PrivateAndroid { return nil, errors.New("privacy Android: API server disabled") }
 	runtimeMu.Lock()
 	defer runtimeMu.Unlock()
 	desired, err := desiredAPIServerConfigLocked()
@@ -56,6 +57,7 @@ func StopAPIServer() (*model.APIServerState, error) {
 }
 
 func RestartAPIServer() (*model.APIServerState, error) {
+	if base.PrivateAndroid { return nil, errors.New("privacy Android: API server disabled") }
 	runtimeMu.Lock()
 	defer runtimeMu.Unlock()
 	desired, err := desiredAPIServerConfigLocked()
