@@ -1195,7 +1195,11 @@ func (d *Downloader) doDelete(task *Task, force bool) (err error) {
 			}
 		}
 		if force && task.Meta.Res != nil {
-			if task.Meta.Res.Name != "" {
+            if base.PrivateAndroid {
+                if !privateAndroidRemove(task.Meta.SingleFilepath()) {
+                    return errors.New("unable to delete MediaStore download")
+                }
+            } else if task.Meta.Res.Name != "" {
 				if err := os.RemoveAll(task.Meta.FolderPath()); err != nil {
 					return err
 				}
@@ -1377,9 +1381,21 @@ func (d *Downloader) GetTasksByFilter(filter *TaskFilter) []*Task {
 }
 
 func (d *Downloader) GetConfig() (*base.DownloaderStoreConfig, error) {
-	d.configLock.RLock()
-	defer d.configLock.RUnlock()
-	return util.DeepClone(d.cfg.DownloaderStoreConfig), nil
+    d.configLock.RLock()
+    defer d.configLock.RUnlock()
+    cfg := util.DeepClone(d.cfg.DownloaderStoreConfig)
+    if base.PrivateAndroid {
+        cfg.DownloadDir = privateAndroidDirectory()
+        cfg.AutoCategorize = new(bool)
+        cfg.Categories = nil
+        cfg.API = (&base.APIServerConfig{}).Init()
+        cfg.Webhook = &base.WebhookConfig{}
+        cfg.Script = &base.ScriptConfig{}
+        if cfg.Extra == nil { cfg.Extra = make(map[string]any) }
+        cfg.Extra["analyticsEnabled"] = false
+        cfg.Extra["notifyWhenNewVersion"] = false
+    }
+    return cfg, nil
 }
 
 // IsFirstLoad reports whether Setup created the config instead of loading it
@@ -1397,6 +1413,9 @@ func (d *Downloader) PutConfig(v *base.DownloaderStoreConfig) error {
 	}
 	next := util.DeepClone(v)
     if base.PrivateAndroid {
+        dir := privateAndroidDirectory()
+        if dir == "" { return errors.New("MediaStore Download directory unavailable") }
+        next.DownloadDir = dir
         // User-visible settings are preserved, but these security-critical
         // capabilities cannot be reenabled by importing stored config.
         next.API = (&base.APIServerConfig{}).Init()
@@ -1474,6 +1493,7 @@ func (d *Downloader) PutConfig(v *base.DownloaderStoreConfig) error {
 }
 
 func (d *Downloader) prepareDefaultPath(opts *base.Options) (string, error) {
+    if base.PrivateAndroid { return "", nil }
 	// Only a directory the user named explicitly becomes the global default
 	// download directory. A task that keeps the auto categorize decision owns
 	// its directory, the backend must not turn it into the global default.
@@ -1498,6 +1518,7 @@ func (d *Downloader) persistDefaultPathBestEffort(defaultPath string) {
 }
 
 func (d *Downloader) persistDefaultPath(defaultPath string) error {
+    if base.PrivateAndroid { return nil }
 	d.configLock.Lock()
 	defer d.configLock.Unlock()
 
@@ -1595,6 +1616,12 @@ func (d *Downloader) watch(task *Task) {
 			}
 		}
 
+        if base.PrivateAndroid {
+            if err := privateAndroidPublish(task.Meta.SingleFilepath()); err != nil {
+                d.doOnError(task, err)
+                return
+            }
+        }
 		if !d.markTaskDone(task) {
 			return
 		}
@@ -1926,6 +1953,13 @@ func (d *Downloader) initOptions(opts *base.Options, requestURL string) (*base.O
 }
 
 func (d *Downloader) initDownloadPath(path string) (string, error) {
+    if base.PrivateAndroid {
+        dir := privateAndroidDirectory()
+        if dir == "" || filepath.Clean(path) != dir {
+            return "", errors.New("privacy Android only writes into public Download directory")
+        }
+        return dir, nil
+    }
 	// Replace placeholders in download path (e.g., %year%, %month%, %day%, %date%)
 	path = util.ReplacePathPlaceholders(path)
 
@@ -1993,9 +2027,19 @@ func (d *Downloader) prepareTask(task *Task) error {
 		}
 	}
 
-	preparedMeta.Res.CalcSize(preparedMeta.Opts.SelectFiles)
+    if base.PrivateAndroid {
+        if preparedMeta.Res.Name != "" || len(preparedMeta.Res.Files) != 1 {
+            return errors.New("privacy Android permits only single-file HTTP downloads")
+        }
+        requestedName := preparedMeta.Res.Files[0].Name
+        if preparedMeta.Opts.Name != "" { requestedName = preparedMeta.Opts.Name }
+        publishedPath, err := privateAndroidPrepare(requestedName)
+        if err != nil { return err }
+        preparedMeta.Opts.Name = filepath.Base(publishedPath)
+    }
+    preparedMeta.Res.CalcSize(preparedMeta.Opts.SelectFiles)
 
-	// Save a candidate task before publishing its metadata. The fetcher keeps
+    // Save a candidate task before publishing its metadata. The fetcher keeps
 	// its resolved protocol state, so a failed save cannot change the live
 	// directory, name or preparation flag.
 	task.statusLock.Lock()
