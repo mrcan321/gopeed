@@ -281,6 +281,9 @@ class AppRuntimeController extends AsyncNotifier<AppRuntimeState> {
       return (await getDownloadsDirectory())?.path ?? '';
     }
     if (Util.isAndroid()) {
+      if (const bool.fromEnvironment('GOPEED_PRIVACY_MODE', defaultValue: false)) {
+        return '/storage/emulated/0/Download';
+      }
       return (await getExternalStorageDirectory())?.path ?? (await getApplicationDocumentsDirectory()).path;
     }
     if (Util.isIOS()) {
