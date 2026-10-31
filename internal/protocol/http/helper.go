@@ -164,7 +164,23 @@ func (f *Fetcher) buildRequestWithURL(ctx context.Context, req *base.Request, us
 	if err != nil {
 		return
 	}
-	httpReq.Header = headers
+	if base.PrivateAndroid {
+        if method != http.MethodGet || body != nil { return nil, fmt.Errorf("privacy Android permits only HTTPS GET") }
+        original, origErr := url.Parse(req.URL)
+        actual, actualErr := url.Parse(reqUrl)
+        if origErr != nil || actualErr != nil ||
+            original.Scheme != "https" || actual.Scheme != "https" ||
+            !strings.EqualFold(original.Host, actual.Host) {
+            return nil, fmt.Errorf("privacy Android forbids cross-origin request")
+        }
+        headers.Del("Cookie")
+        headers.Del("Authorization")
+        headers.Del("Proxy-Authorization")
+        headers.Del("Referer")
+        headers.Del("Host")
+        headers.Set("User-Agent", "Gopeed-Private-Android/1.0")
+    }
+    httpReq.Header = headers
 	if host := headers.Get(base.HttpHeaderHost); host != "" {
 		httpReq.Host = host
 	}
@@ -267,7 +283,14 @@ func (f *Fetcher) buildFastFailClient() *http.Client {
 // buildClientWithTimeout creates an HTTP client with the specified connection timeout.
 func (f *Fetcher) buildClientWithTimeout(timeout time.Duration) *http.Client {
 	jar, _ := cookiejar.New(nil)
-	client, err := httpclient.NewClient(httpclient.Options{
+    proxy := f.ctl.GetProxy(f.meta.Req.Proxy)
+    skipVerify := f.meta.Req.SkipVerifyCert
+    if base.PrivateAndroid {
+        // Disable both system/environment proxies and caller-provided proxies.
+        proxy = func(*http.Request) (*url.URL, error) { return nil, nil }
+        skipVerify = false
+    }
+    client, err := httpclient.NewClient(httpclient.Options{
 		Client: httpclient.ClientOptions{
 			Jar: jar,
 		},
@@ -275,9 +298,9 @@ func (f *Fetcher) buildClientWithTimeout(timeout time.Duration) *http.Client {
 			DialContext: (&net.Dialer{
 				Timeout: timeout,
 			}).DialContext,
-			Proxy: f.ctl.GetProxy(f.meta.Req.Proxy),
+			Proxy: proxy,
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: f.meta.Req.SkipVerifyCert,
+				InsecureSkipVerify: skipVerify,
 			},
 			TLSHandshakeTimeout: timeout,
 		},
@@ -287,9 +310,20 @@ func (f *Fetcher) buildClientWithTimeout(timeout time.Duration) *http.Client {
 		},
 	})
 	if err != nil {
-		panic(fmt.Sprintf("build HTTP client: %v", err))
-	}
-	return client
+        panic(fmt.Sprintf("build HTTP client: %v", err))
+    }
+    if base.PrivateAndroid {
+        // HTTPS redirects are allowed only within the exact host the user typed.
+        origin, err := url.Parse(f.meta.Req.URL)
+        if err != nil { panic(err) }
+        client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+            if len(via) >= 10 || request.URL.Scheme != "https" || !strings.EqualFold(request.URL.Host, origin.Host) {
+                return http.ErrUseLastResponse
+            }
+            return nil
+        }
+    }
+    return client
 }
 
 // ============================================================================
