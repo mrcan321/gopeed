@@ -1394,7 +1394,27 @@ func (d *Downloader) PutConfig(v *base.DownloaderStoreConfig) error {
 		return errors.New("config is nil")
 	}
 	next := util.DeepClone(v)
-	changedProtocols := []string{}
+    if base.PrivateAndroid {
+        // User-visible settings are preserved, but these security-critical
+        // capabilities cannot be reenabled by importing stored config.
+        next.API = (&base.APIServerConfig{}).Init()
+        next.API.Enable = false
+        next.API.MCPEnable = false
+        next.Webhook = &base.WebhookConfig{}
+        next.Script = &base.ScriptConfig{}
+        next.AutoTorrent = &base.AutoTorrentConfig{}
+        next.Archive = &base.ArchiveConfig{}
+        disabled := false
+        next.AutoCategorize = &disabled
+        next.Categories = nil
+        next.Proxy = &base.DownloaderProxyConfig{}
+        next.AutoStartTasks = false
+        if next.Extra == nil { next.Extra = make(map[string]any) }
+        next.Extra["analyticsEnabled"] = false
+        next.Extra["notifyWhenNewVersion"] = false
+        next.Extra["deviceId"] = ""
+    }
+    changedProtocols := []string{}
 	d.configLock.Lock()
 	if d.closed.Load() {
 		d.configLock.Unlock()
