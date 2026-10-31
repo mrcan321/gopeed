@@ -124,9 +124,11 @@ func privacyRangeResponse(w http.ResponseWriter,r *http.Request,payload []byte) 
     rangeText:=r.Header.Get("Range")
     if rangeText!="" {
         var start,end int
-        if n,_:=fmt.Sscanf(rangeText,"bytes=%d-%d",&start,&end);n<1 {http.Error(w,"bad range",416);return}
+        n,_:=fmt.Sscanf(rangeText,"bytes=%d-%d",&start,&end)
+        if n<1 {http.Error(w,"bad range",416);return}
+        if n==1 {end=len(payload)-1}
         if start>=len(payload) {w.Header().Set("Content-Range",fmt.Sprintf("bytes */%d",len(payload)));w.WriteHeader(416);return}
-        if end<=0 || end>=len(payload) {end=len(payload)-1}
+        if end>=len(payload) {end=len(payload)-1}
         if start>end {http.Error(w,"bad range",416);return}
         sub:=payload[start:end+1]
         w.Header().Set("Content-Length",strconv.Itoa(len(sub)))
@@ -246,9 +248,6 @@ func TestPrivacyRejectsUnrequestedURLs(t *testing.T) {
     }
     if _,err:=d.CreateDirect(&base.Request{URL:"file:///sdcard/DCIM/image.jpg"},&base.Options{});err==nil{
         t.Error("downloader accepted local photo access")
-    }
-    if _,err:=d.CreateDirect(&base.Request{URL:"https://example.com/a"},&base.Options{Path:"/sdcard/DCIM"});err!=nil {
-        t.Logf("Remote URL test cannot connect, expected: %v",err)
     }
     cfg,err:=d.GetConfig()
     if err!=nil{t.Fatal(err)}
