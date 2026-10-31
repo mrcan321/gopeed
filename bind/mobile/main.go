@@ -13,8 +13,16 @@ import (
 	"github.com/GopeedLab/gopeed/pkg/rest/model"
 )
 
+// DownloadFileProvider is gomobile-bindable and implemented by Android MediaStore.
+type DownloadFileProvider interface {
+    Directory() string
+    Prepare(fileName string) string
+    Publish(fullPath string) bool
+    Remove(fullPath string) bool
+}
+
 // SetDownloadFileProvider connects MediaStore to the original Gopeed file writer.
-func SetDownloadFileProvider(provider download.DownloadFileProvider) {
+func SetDownloadFileProvider(provider DownloadFileProvider) {
     download.RegisterPrivateAndroidStorage(provider)
 }
 
