@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+    "strings"
 	"sync"
 	"time"
 
@@ -30,8 +31,8 @@ type Request struct {
 func (r *Request) Validate() error {
 	if r.URL == "" { return fmt.Errorf("invalid request url") }
     if PrivateAndroid {
-        parsed, err := url.ParseRequestURI(r.URL)
-        if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+        parsed, err := url.Parse(r.URL)
+        if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || strings.Contains(r.URL, "#") {
             return fmt.Errorf("privacy Android permits only explicit HTTPS download URLs")
         }
         if r.SkipVerifyCert || (r.Proxy != nil && r.Proxy.Mode == RequestProxyModeCustom) {
