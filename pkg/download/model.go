@@ -228,8 +228,13 @@ func (cfg *DownloaderConfig) Init() *DownloaderConfig {
 	if cfg.Controller == nil {
 		cfg.Controller = controller.NewController()
 	}
-	if len(cfg.FetchManagers) == 0 {
-		cfg.FetchManagers = []fetcher.FetcherManager{
+	if len(cfg.FetchManagers) == 0 && base.PrivateAndroid {
+        // Keep the original multi-connection Gopeed HTTP engine only.
+        // BT/ED2K/FTP/HLS may contact trackers, peers or unrelated hosts.
+        cfg.FetchManagers = []fetcher.FetcherManager{new(http.FetcherManager)}
+    }
+    if len(cfg.FetchManagers) == 0 {
+        cfg.FetchManagers = []fetcher.FetcherManager{
 			// FTP matches by URL scheme only. It comes before the managers that
 			// match by file extension, so ftp://host/x.torrent or x.m3u8 is
 			// downloaded as a file over FTP.
