@@ -16,11 +16,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Verify the APK source commit is unchanged
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "832c76902ef3d73768943efeb1a322e920ec51c7"
+          git merge-base --is-ancestor 832c76902ef3d73768943efeb1a322e920ec51c7 HEAD
+          git diff --quiet 832c76902ef3d73768943efeb1a322e920ec51c7 HEAD -- pkg bind ui internal go.mod go.sum
           test -f pkg/download/android_storage.go
           test -f ui/flutter/android/app/src/main/kotlin/com/gopeed/gopeed/PrivateDownloads.kt
       - name: Download successfully built and checked ARM64 artifact
