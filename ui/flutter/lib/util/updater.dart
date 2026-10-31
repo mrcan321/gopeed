@@ -103,7 +103,9 @@ Future<void> updateApp(
   required GopeedService service,
   required UpdateProgressCallback onProgress,
 }) async {
-  if (_privateNoExtensions) throw StateError('Official updates disabled for personal no-extension builds');
+  if (_privateNoExtensions || const bool.fromEnvironment('GOPEED_PRIVACY_MODE', defaultValue: false)) {
+    throw StateError('Official update checks and installation disabled in privacy Android');
+  }
   final channel = updateChannel;
   final assetName = appUpdateAssetName(versionInfo.version, channel, getArch().name);
   var assetPath = '';
