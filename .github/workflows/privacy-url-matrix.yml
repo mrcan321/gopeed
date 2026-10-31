@@ -7,6 +7,7 @@ on:
       - 'pkg/download/privacy_url_matrix_test.go'
       - 'pkg/download/android_storage.go'
       - 'pkg/base/privacy*.go'
+      - 'pkg/base/model.go'
       - 'pkg/download/downloader.go'
       - 'internal/protocol/http/**'
       - '.github/workflows/privacy-url-matrix.yml'
