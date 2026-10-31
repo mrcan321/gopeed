@@ -1,0 +1,54 @@
+name: Privacy Android URL download matrix
+
+on:
+  push:
+    branches: [privacy-url-matrix-tests-20261031]
+    paths:
+      - 'pkg/download/privacy_url_matrix_test.go'
+      - 'pkg/download/android_storage.go'
+      - 'pkg/download/downloader.go'
+      - 'internal/protocol/http/**'
+      - '.github/workflows/privacy-url-matrix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gopeed-private-url-matrix:
+    name: Test original Gopeed downloader with HTTPS URL matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: 11 local TLS URLs, formats, 16 connections, redirects, bad URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -tags nosqlite,privacyandroid -timeout 10m -count=1 -v -run '^(TestPrivacyURLMatrixLocalTLS|TestPrivacyRejectsUnrequestedURLs)$' ./pkg/download 2>&1 | tee /tmp/privacy-local.txt
+      - name: Real Internet HTTPS URLs downloaded by Gopeed (not curl)
+        shell: bash
+        env:
+          PRIVACY_LIVE_URLS: |
+            https://raw.githubusercontent.com/github/gitignore/main/Go.gitignore
+            https://raw.githubusercontent.com/github/gitignore/main/Java.gitignore
+            https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore
+            https://raw.githubusercontent.com/github/gitignore/main/Node.gitignore
+            https://www.google.com/robots.txt
+            https://speed.cloudflare.com/__down?bytes=131072
+            https://httpbin.org/bytes/4096
+            https://httpbingo.org/bytes/1024
+        run: |
+          set -euo pipefail
+          go test -tags nosqlite,privacyandroid -timeout 12m -count=1 -v -run '^TestPrivacyLiveURLMatrix$' ./pkg/download 2>&1 | tee /tmp/privacy-live.txt
+      - name: Store source-engine test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: privacy-url-test-report
+          path: /tmp/privacy-*.txt
+          if-no-files-found: ignore
