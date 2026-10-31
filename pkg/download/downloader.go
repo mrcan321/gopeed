@@ -536,8 +536,9 @@ func (d *Downloader) Resolve(req *base.Request) (rr *ResolveResult, err error) {
 		return
 	}
 	ensureRequestRawURL(req)
+    if err := req.Validate(); err != nil { return nil, err }
 
-	res, err := d.triggerOnResolve(req)
+    res, err := d.triggerOnResolve(req)
 	if err != nil {
 		return
 	}
@@ -608,7 +609,8 @@ func (d *Downloader) CreateDirect(req *base.Request, opts *base.Options) (taskId
 }
 
 func (d *Downloader) createDirect(req *base.Request, opts *base.Options) (taskId string, err error) {
-	ensureRequestRawURL(req)
+    if err := req.Validate(); err != nil { return "", err }
+    ensureRequestRawURL(req)
 	var fetcher fetcher.Fetcher
 	fetcher, err = d.buildFetcher(req.URL)
 	if err != nil {
